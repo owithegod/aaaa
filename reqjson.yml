@@ -1,0 +1,54 @@
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * 5"
+
+permissions: 
+  contents: write
+
+
+
+
+jobs: 
+  reqAPI:
+    name: Req API
+    runs-on: ubuntu-latest
+    env:
+      VITE_LASTFM_APIKEY: ${{ secrets.LASTFM_APIKEY }}
+      VITE_LASTFM_USERNAME: ${{ secrets.LASTFM_USERNAME }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      #weeklyの最新のfromtoゲットしてそれで個別のchartゲットしてるらしいっすねw
+      - name: fetch weekly charts
+        run: |
+      
+
+            curl -s "https://ws.audioscrobbler.com/2.0/?method=user.getweeklychartlist&user=$VITE_LASTFM_USERNAME&api_key=$VITE_LASTFM_APIKEY&format=json" -o public/tmp/chartlist.json
+            cat public/tmp/chartlist.json
+            
+            FROM=$(jq -r '.weeklychartlist.chart[-1].from' public/tmp/chartlist.json)
+            TO=$(jq -r '.weeklychartlist.chart[-1].to' public/tmp/chartlist.json)
+            NAME="${FROM}_${TO}"
+            curl -s "https://ws.audioscrobbler.com/2.0/?method=user.getweeklyalbumchart&user=$VITE_LASTFM_USERNAME&from=$FROM&to=$TO&api_key=$VITE_LASTFM_APIKEY&format=json" -o public/data/album/album_$NAME.json
+            curl -s "https://ws.audioscrobbler.com/2.0/?method=user.getweeklyartistchart&user=$VITE_LASTFM_USERNAME&from=$FROM&to=$TO&api_key=$VITE_LASTFM_APIKEY&format=json" -o public/data/artist/artist_$NAME.json
+            curl -s "https://ws.audioscrobbler.com/2.0/?method=user.getweeklytrackchart&user=$VITE_LASTFM_USERNAME&from=$FROM&to=$TO&api_key=$VITE_LASTFM_APIKEY&format=json" -o public/data/track/track_$NAME.json
+
+        #
+      - name: Commit JSON
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          ls -R public/data/
+          git add -f public/data/
+
+          git status
+
+          git diff --cached --quiet && exit 0
+          git commit -m "Update json"
+
+          git push 
+    
